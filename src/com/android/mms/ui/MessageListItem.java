@@ -104,6 +104,10 @@ import com.google.android.mms.pdu.NotificationInd;
 import com.google.android.mms.pdu.PduHeaders;
 import com.google.android.mms.pdu.PduPersister;
 
+import com.android.mms.util.StringUtils;
+import android.content.ClipboardManager;
+import android.widget.Toast;
+
 /**
  * This class provides view of a message in the messages list.
  */
@@ -125,6 +129,9 @@ public class MessageListItem extends ZoomMessageListItem implements
     static final int MSG_LIST_DETAILS = 3;
 
     private boolean mIsCheck = false;
+
+    private View mDivider;
+    private Button mNextButton;
 
     private View mMmsView;
     private ImageView mImageView;
@@ -149,6 +156,9 @@ public class MessageListItem extends ZoomMessageListItem implements
     static private RoundedBitmapDrawable sDefaultContactImage;
     private Presenter mPresenter;
     private int mPosition;      // for debugging
+    private int mCount;      // for debugging
+    boolean mHaveUnRead = false;
+    boolean mHaveCopy = false;
     private ImageLoadedCallback mImageLoadedCallback;
     private boolean mMultiRecipients;
     private int mManageMode;
@@ -190,6 +200,9 @@ public class MessageListItem extends ZoomMessageListItem implements
         mMessageSizeView = (TextView) findViewById(R.id.mms_msg_size_view);
         mMmsLayout = (LinearLayout) findViewById(R.id.mms_layout_view_parent);
 
+        mDivider = (View) findViewById(R.id.text_button_divider);
+        mNextButton = (Button) findViewById(R.id.text_button);
+
         mAvatar.setOverlay(null);
 
         // Add the views to be managed by the zoom control
@@ -201,7 +214,7 @@ public class MessageListItem extends ZoomMessageListItem implements
     }
 
     public void bind(MessageItem msgItem, int accentColor,
-            boolean convHasMultiRecipients, int position, boolean selected) {
+            boolean convHasMultiRecipients, int position, int count, boolean selected, boolean haveUnRead) {
         if (DEBUG) {
             Log.v(TAG, "bind for item: " + position + " old: " +
                    (mMessageItem != null ? mMessageItem.toString() : "NULL" ) +
@@ -210,6 +223,8 @@ public class MessageListItem extends ZoomMessageListItem implements
         boolean sameItem = mMessageItem != null && mMessageItem.mMsgId == msgItem.mMsgId;
         mMessageItem = msgItem;
         mPosition = position;
+        mCount = count;
+        mHaveUnRead = haveUnRead;
         mMultiRecipients = convHasMultiRecipients;
 
         setLongClickable(false);
@@ -492,6 +507,27 @@ public class MessageListItem extends ZoomMessageListItem implements
         }
         if (!sameItem || haveLoadedPdu) {
             mBodyTextView.setText(formattedMessage);
+        }
+        if((mCount-1 == mPosition) && mHaveUnRead && !mHaveCopy) {
+            final String captchas = StringUtils.getCaptchas(formattedMessage.toString());
+            if (!"".equals(captchas)) {
+                mDivider.setVisibility(View.VISIBLE);
+                mNextButton.setVisibility(View.VISIBLE);
+                mNextButton.getBackground().setAlpha(10);
+                mNextButton.setText(mContext.getString(R.string.click_copy) + "(" + captchas + ")");
+                mNextButton.setOnClickListener(new OnClickListener() {
+                    @Override
+                        public void onClick(View v) {
+                        ClipboardManager c = (ClipboardManager)
+                        mContext.getSystemService(Context.CLIPBOARD_SERVICE);
+                        c.setText(captchas);
+                        Toast.makeText(mContext, R.string.code_have_copy, Toast.LENGTH_SHORT).show();
+                        mDivider.setVisibility(View.GONE);
+                        mNextButton.setVisibility(View.GONE);
+                        mHaveCopy = true;
+                    }
+                });
+            }
         }
         updateSimIndicatorView(mMessageItem.mSubId);
         // Debugging code to put the URI of the image attachment in the body of the list item.

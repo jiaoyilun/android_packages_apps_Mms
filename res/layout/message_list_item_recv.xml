@@ -145,6 +145,20 @@
                         android:visibility="gone" />
                 </LinearLayout>
 
+                <View
+                    android:id="@+id/text_button_divider"
+                    android:layout_width="match_parent"
+                    android:layout_height="1dip"
+                    android:visibility="gone"
+                    android:background="@android:color/white" />
+
+                <Button
+                    android:id="@+id/text_button"
+                    android:layout_width="match_parent"
+                    android:layout_height="36dp"
+                    android:text="@string/click_copy"
+                    android:visibility="gone" />
+
                 <ViewStub android:id="@+id/mms_layout_view_stub"
                     android:layout="@layout/mms_layout_view"
                     android:layout_width="wrap_content"

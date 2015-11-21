@@ -802,16 +802,19 @@ public class ConversationList extends ListActivity implements DraftCache.OnDraft
         if (LogTag.VERBOSE) {
             Log.d(TAG, "onListItemClick: pos=" + position + ", view=" + v + ", tid=" + tid);
         }
-
-        openThread(tid);
+        if (conv.hasUnreadMessages()) {
+            openThread(tid, true);
+        } else {
+            openThread(tid, false);
+        }
     }
 
     private void createNewMessage() {
-        startActivity(ComposeMessageActivity.createIntent(this, 0));
+        startActivity(ComposeMessageActivity.createIntent(this, 0, false));
     }
 
-    private void openThread(long threadId) {
-        startActivity(ComposeMessageActivity.createIntent(this, threadId));
+    private void openThread(long threadId, boolean haveUnRead) {
+        startActivity(ComposeMessageActivity.createIntent(this, threadId, haveUnRead));
     }
 
     public static Intent createAddContactIntent(String address) {
@@ -874,7 +877,7 @@ public class ConversationList extends ListActivity implements DraftCache.OnDraft
                 break;
             }
             case MENU_VIEW: {
-                openThread(threadId);
+                openThread(threadId, false);
                 break;
             }
             case MENU_VIEW_CONTACT: {

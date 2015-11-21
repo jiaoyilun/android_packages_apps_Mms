@@ -24,7 +24,7 @@ LOCAL_PACKAGE_NAME := Mms
 
 LOCAL_JAVA_LIBRARIES += telephony-common
 LOCAL_STATIC_JAVA_LIBRARIES += android-common jsr305
-LOCAL_STATIC_JAVA_LIBRARIES += libchips
+LOCAL_STATIC_JAVA_LIBRARIES += libchips libSudaPinYin libSudaLocation
 LOCAL_STATIC_JAVA_LIBRARIES += com.android.vcard libphonenumber libgeocoding guava
 LOCAL_STATIC_JAVA_LIBRARIES += android-support-v7-palette
 LOCAL_STATIC_JAVA_LIBRARIES += android-support-v4

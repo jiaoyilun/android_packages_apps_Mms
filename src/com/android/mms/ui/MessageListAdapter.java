@@ -193,15 +193,17 @@ public class MessageListAdapter extends CursorAdapter {
     // for multi delete sim messages or forward merged message
     private int mMultiManageMode = MessageUtils.INVALID_MODE;
     private int mAccentColor = 0;
+    boolean mHaveUnRead = false;
 
     private HashMap<Integer, String> mBodyCache;
 
     public MessageListAdapter(
             Context context, Cursor c, ListView listView,
-            boolean useDefaultColumnsMap, Pattern highlight) {
+            boolean useDefaultColumnsMap, Pattern highlight, boolean haveUnRead) {
         super(context, c, FLAG_REGISTER_CONTENT_OBSERVER);
         mContext = context;
         mHighlight = highlight;
+        mHaveUnRead = haveUnRead;
 
         mInflater = (LayoutInflater) context.getSystemService(
                 Context.LAYOUT_INFLATER_SERVICE);
@@ -253,8 +255,8 @@ public class MessageListAdapter extends CursorAdapter {
                     accentColor = res.getColor(R.color.incoming_message_bg_default);
                 }
 
-                mli.bind(msgItem, accentColor, mIsGroupConversation, position,
-                        mListView.isItemChecked(position));
+                mli.bind(msgItem, accentColor, mIsGroupConversation, position, cursor.getCount(),
+                        mListView.isItemChecked(position), mHaveUnRead);
                 mli.setMsgListItemHandler(mMsgListItemHandler);
 
                 mBodyCache.put(position, msgItem.mBody);

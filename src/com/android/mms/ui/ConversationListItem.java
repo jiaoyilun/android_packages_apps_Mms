@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2008 Esmertec AG.
  * Copyright (C) 2008 The Android Open Source Project
+ * Copyright (C) 2015 The SudaMod Project  
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +24,8 @@ import android.graphics.Typeface;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.drawable.Drawable;
+import android.suda.location.PhoneLocation;
+import android.suda.utils.SudaUtils;
 import android.os.Handler;
 import android.support.v4.graphics.drawable.RoundedBitmapDrawable;
 import android.support.v4.graphics.drawable.RoundedBitmapDrawableFactory;
@@ -38,6 +41,9 @@ import android.view.View;
 import android.widget.Checkable;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
+
+import com.a1os.cloud.phone.PhoneUtil;
+import com.android.mms.util.StringUtils;
 
 import com.android.contacts.common.widget.CheckableQuickContactBadge;
 import com.android.mms.LogTag;
@@ -62,6 +68,7 @@ public class ConversationListItem extends RelativeLayout implements Contact.Upda
     private TextView mSubjectView;
     private TextView mFromView;
     private TextView mDateView;
+    private TextView mLocationView;
     private View mAttachmentView;
     private View mErrorIndicator;
     private CheckableQuickContactBadge mAvatarView;
@@ -73,17 +80,21 @@ public class ConversationListItem extends RelativeLayout implements Contact.Upda
 
     private Conversation mConversation;
 
+    private Context mContext;
+
+
     public static final StyleSpan STYLE_BOLD = new StyleSpan(Typeface.BOLD);
     public static final Pattern RTL_CHARACTERS =
         Pattern.compile("[\u0600-\u06FF\u0750-\u077F\u0590-\u05FF\uFE70-\uFEFF]");
 
     public ConversationListItem(Context context) {
         super(context);
+        mContext = context;
     }
 
     public ConversationListItem(Context context, AttributeSet attrs) {
         super(context, attrs);
-
+        mContext = context;
         if (sDefaultContactImage == null) {
             Resources res = context.getResources();
             Bitmap defaultImage = BitmapFactory.decodeResource(res, R.drawable.ic_contact_picture);
@@ -102,6 +113,7 @@ public class ConversationListItem extends RelativeLayout implements Contact.Upda
         mSubjectView = (TextView) findViewById(R.id.subject);
 
         mDateView = (TextView) findViewById(R.id.date);
+        mLocationView = (TextView) findViewById(R.id.location);
         mAttachmentView = findViewById(R.id.attachment);
         mErrorIndicator = findViewById(R.id.error);
         mAvatarView = (CheckableQuickContactBadge) findViewById(R.id.avatar);
@@ -271,11 +283,6 @@ public class ConversationListItem extends RelativeLayout implements Contact.Upda
         // Register for updates in changes of any of the contacts in this conversation.
         ContactList contacts = conversation.getRecipients();
 
-        if (Log.isLoggable(LogTag.CONTACT, Log.DEBUG)) {
-            Log.v(TAG, "bind: contacts.addListeners " + this);
-        }
-        Contact.addListener(this);
-
         // Subject
         SmileyParser parser = SmileyParser.getInstance();
         final String snippet = conversation.getSnippet();
@@ -286,6 +293,26 @@ public class ConversationListItem extends RelativeLayout implements Contact.Upda
         } else {
             mSubjectView.setText(parser.addSmileySpans(snippet));
         }
+
+        // Location
+        if (SudaUtils.isSupportLanguage(true)) {
+            String company = StringUtils.getContentInBracket(snippet, contacts.get(0).getNumber());
+            String location = PhoneUtil.getPhoneUtil(mContext).getLocalNumberInfo(contacts.get(0).getNumber());
+            if (TextUtils.isEmpty(location) || "信息服务台".equals(location)) {
+                if (!TextUtils.isEmpty(company)) {
+                    mLocationView.setText(company);
+                } else {
+                    mLocationView.setText(location);
+                }
+            } else {
+                mLocationView.setText(location);
+            }
+        }
+
+        if (Log.isLoggable(LogTag.CONTACT, Log.DEBUG)) {
+            Log.v(TAG, "bind: contacts.addListeners " + this);
+        }
+        Contact.addListener(this);
 
         // Transmission error indicator.
         mErrorIndicator.setVisibility(hasError ? VISIBLE : GONE);

@@ -1011,7 +1011,7 @@ public class MessagingNotification {
     private static final Intent getClickIntent(Context context, boolean isSms, long threadId) {
         Intent intent;
         if (!MessageUtils.isMailboxMode()) {
-            intent = ComposeMessageActivity.createIntent(context, threadId);
+            intent = ComposeMessageActivity.createIntent(context, threadId,true);
             intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK
                     | Intent.FLAG_ACTIVITY_SINGLE_TOP
                     | Intent.FLAG_ACTIVITY_CLEAR_TOP);

@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2008 Esmertec AG.
  * Copyright (C) 2008 The Android Open Source Project
+ * Copyright (C) 2008 The SudaMod Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,6 +79,7 @@ import android.drm.DrmStore;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.media.RingtoneManager;
+import android.suda.hardware.ProximitySensorManager;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -143,10 +145,10 @@ import android.widget.SimpleAdapter;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.Toolbar;
+import android.view.Window;
 
 import com.android.contacts.common.util.MaterialColorMapUtils;
 import com.android.contacts.common.util.MaterialColorMapUtils.MaterialPalette;
-import com.android.contacts.common.util.PickupGestureDetector;
 import com.android.internal.telephony.PhoneConstants;
 import com.android.internal.telephony.RILConstants;
 import com.android.internal.telephony.TelephonyIntents;
@@ -204,7 +206,7 @@ import com.google.android.mms.pdu.SendReq;
 public class ComposeMessageActivity extends Activity
         implements View.OnClickListener, TextView.OnEditorActionListener,
         MessageStatusListener, Contact.UpdateListener, IZoomListener,
-        PickupGestureDetector.PickupListener {
+        ProximitySensorManager.ProximitySensorListener {
     public static final int REQUEST_CODE_ATTACH_IMAGE                   = 100;
     public static final int REQUEST_CODE_TAKE_PICTURE                   = 101;
     public static final int REQUEST_CODE_ATTACH_VIDEO                   = 102;
@@ -339,11 +341,11 @@ public class ComposeMessageActivity extends Activity
 
     private ContentResolver mContentResolver;
 
-    private PickupGestureDetector mPickupDetector;
-
     private BackgroundQueryHandler mBackgroundQueryHandler;
 
     private Conversation mConversation;     // Conversation we are working in
+
+    private ProximitySensorManager mProximitySensorManager;
 
     // When mSendDiscreetMode is true, this activity only allows a user to type in and send
     // a single sms, send the message, and then exits. The message history and menus are hidden.
@@ -492,6 +494,7 @@ public class ComposeMessageActivity extends Activity
     private final static int REPLACE_ATTACHMENT_MASK = 1 << 16;
 
     private boolean mShowTwoButtons = false;
+    private Window mNavBarColor;
 
     private int mAccentColor = 0;
     private int mStatusBarColor = 0;
@@ -504,6 +507,8 @@ public class ComposeMessageActivity extends Activity
     private UnicodeFilter mUnicodeFilter = null;
 
     private AddNumbersTask mAddNumbersTask;
+
+    private static boolean mHaveUnRead = false;
 
     @SuppressWarnings("unused")
     public static void log(String logMsg) {
@@ -1920,6 +1925,7 @@ public class ComposeMessageActivity extends Activity
 
     private void updateThemeColors(int accentColor, int statusBarColor) {
         final ColorDrawable background = new ColorDrawable();
+        mNavBarColor = getWindow();
         final ObjectAnimator backgroundAnimation = ObjectAnimator.ofInt(background,
                 "color", mAccentColor, accentColor);
         final ObjectAnimator statusBarAnimation = ObjectAnimator.ofInt(getWindow(),
@@ -1928,6 +1934,7 @@ public class ComposeMessageActivity extends Activity
         backgroundAnimation.setEvaluator(new ArgbEvaluator());
         statusBarAnimation.setEvaluator(new ArgbEvaluator());
         findViewById(R.id.header).setBackground(background);
+        mNavBarColor.setNavigationBarColor(accentColor);
 
         final AnimatorSet animation = new AnimatorSet();
         animation.playTogether(backgroundAnimation, statusBarAnimation);
@@ -2009,6 +2016,9 @@ public class ComposeMessageActivity extends Activity
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
+        mProximitySensorManager = new ProximitySensorManager(ComposeMessageActivity.this, this);
+
         mIsSmsEnabled = MmsConfig.isSmsEnabled(this);
         super.onCreate(savedInstanceState);
 
@@ -2048,8 +2058,6 @@ public class ComposeMessageActivity extends Activity
 
         updateAccentColorFromTheme(true);
         initialize(savedInstanceState, 0);
-
-        mPickupDetector = new PickupGestureDetector(ComposeMessageActivity.this, this);
 
         if (TRACE) {
             android.os.Debug.startMethodTracing("compose");
@@ -2532,9 +2540,9 @@ public class ComposeMessageActivity extends Activity
         }, 100);
 
         TelephonyManager tm = (TelephonyManager) getSystemService(Service.TELEPHONY_SERVICE);
-        if (MessagingPreferenceActivity.isSmartCallEnabled(ComposeMessageActivity.this)
+        if (Settings.System.getInt(mContentResolver, Settings.System.DIRECT_CALL_FOR_MMS, 0) == 1
               && tm.getCallState() == TelephonyManager.CALL_STATE_IDLE) {
-            mPickupDetector.enable();
+            mProximitySensorManager.enable();
         }
 
         mIsRunning = true;
@@ -2562,7 +2570,8 @@ public class ComposeMessageActivity extends Activity
             mRecipientsEditor.removeTextChangedListener(mRecipientsWatcher);
         }
 
-        mPickupDetector.disable();
+        // always disable just to make sure we never keep it alive
+        mProximitySensorManager.disable();
 
         // remove any callback to display a progress spinner
         if (mAsyncDialog != null) {
@@ -4229,10 +4238,10 @@ public class ComposeMessageActivity extends Activity
 
         @Override
         public void onTextChanged(CharSequence s, int start, int before, int count) {
-            if (s.toString().length() <= SUBJECT_MAX_LENGTH) {
+            if (s.toString().getBytes().length <= SUBJECT_MAX_LENGTH) {
                 mWorkingMessage.setSubject(s, true);
                 updateSendButtonState();
-                if (s.toString().length() == SUBJECT_MAX_LENGTH
+                if (s.toString().getBytes().length == SUBJECT_MAX_LENGTH
                         && before < SUBJECT_MAX_LENGTH) {
                     String toast = getString(R.string.subject_full, SUBJECT_MAX_LENGTH);
                     Toast.makeText(ComposeMessageActivity.this, toast,
@@ -4243,11 +4252,13 @@ public class ComposeMessageActivity extends Activity
 
         @Override
         public void afterTextChanged(Editable s) {
-            if (s.toString().length() > SUBJECT_MAX_LENGTH) {
+            if (s.toString().getBytes().length > SUBJECT_MAX_LENGTH) {
+                String subject = s.toString();
                 String toast = getString(R.string.subject_full, SUBJECT_MAX_LENGTH);
                 Toast.makeText(ComposeMessageActivity.this, toast,
                         Toast.LENGTH_SHORT).show();
-                s.delete(SUBJECT_MAX_LENGTH - 1, s.length());
+                s.clear();
+                s.append(subject.substring(0, SUBJECT_MAX_LENGTH));
             }
         }
     };
@@ -4446,7 +4457,7 @@ public class ComposeMessageActivity extends Activity
             : Pattern.compile("\\b" + Pattern.quote(highlightString), Pattern.CASE_INSENSITIVE);
 
         // Initialize the list adapter with a null cursor.
-        mMsgListAdapter = new MessageListAdapter(this, null, mMsgListView, true, highlight);
+        mMsgListAdapter = new MessageListAdapter(this, null, mMsgListView, true, highlight, mHaveUnRead);
         mMsgListAdapter.setOnDataSetChangedListener(mDataSetChangedListener);
         mMsgListAdapter.setMsgListItemHandler(mMessageListItemHandler);
         mMsgListView.setAdapter(mMsgListAdapter);
@@ -4694,20 +4705,6 @@ public class ComposeMessageActivity extends Activity
             text = mUnicodeFilter.filter(text);
         }
         return text;
-    }
-
-    @Override
-    public void onPickup() {
-        if (!getRecipients().isEmpty()) {
-            mPickupDetector.disable();
-
-            // call the first recipient
-            String number = getRecipients().get(0).getNumber();
-            Intent dialIntent = new Intent(Intent.ACTION_CALL);
-            dialIntent.setData(Uri.fromParts("tel", number, null));
-            dialIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(dialIntent);
-        }
     }
 
     private void resetMessage() {
@@ -5389,9 +5386,9 @@ public class ComposeMessageActivity extends Activity
         Contact.removeListener(this);
     }
 
-    public static Intent createIntent(Context context, long threadId) {
+    public static Intent createIntent(Context context, long threadId, boolean haveUnRead) {
         Intent intent = new Intent(context, ComposeMessageActivity.class);
-
+        mHaveUnRead = haveUnRead;
         if (threadId > 0) {
             intent.setData(Conversation.getUri(threadId));
         }
@@ -5713,19 +5710,6 @@ public class ComposeMessageActivity extends Activity
                     item.setVisible(false);
                 }
             }
-
-            int checkedCount = getListView().getCheckedItemCount();
-            if (checkedCount > 0) { // action mode was restarted
-                updateCheckedStatus(mode, checkedCount);
-                // loop through checked items and update statistics
-                SparseBooleanArray checkedList = getListView().getCheckedItemPositions();
-                for (int i = 0; i < checkedList.size(); i++) {
-                    int position = checkedList.keyAt(i);
-                    boolean isChecked = checkedList.valueAt(i);
-                    updateStatics(position, isChecked);
-                    customMenuVisibility(mode, checkedCount, position, isChecked);
-                }
-            }
             return true;
         }
 
@@ -5952,7 +5936,7 @@ public class ComposeMessageActivity extends Activity
                     // Once the above background thread is complete, this
                     // runnable is run
                     // on the UI thread.
-                    Intent intent = createIntent(ComposeMessageActivity.this, 0);
+                    Intent intent = createIntent(ComposeMessageActivity.this, 0, false);
 
                     intent.putExtra(KEY_EXIT_ON_SENT, true);
                     intent.putExtra(KEY_FORWARDED_MESSAGE, true);
@@ -6019,7 +6003,7 @@ public class ComposeMessageActivity extends Activity
         }
 
         private boolean isAttachmentSaveable(int pos) {
-            MessageListItem msglistItem = (MessageListItem) mMsgListView.getChildAt(pos);
+            MessageListItem msglistItem = (MessageListItem) mMsgListView.getChildAt(pos -mMsgListView.getFirstVisiblePosition());
             return msglistItem != null && msglistItem.getMessageItem() != null
                     && msglistItem.getMessageItem().hasAttachemntToSave();
         }
@@ -6108,7 +6092,7 @@ public class ComposeMessageActivity extends Activity
         }
 
         private MessageItem getMessageItemByPos(int position) {
-            MessageListItem msglistItem = (MessageListItem) mMsgListView.getChildAt(position);
+            MessageListItem msglistItem = (MessageListItem) mMsgListView.getChildAt(position - mMsgListView.getFirstVisiblePosition());
             if (msglistItem == null) {
                 return null;
             }
@@ -6140,7 +6124,7 @@ public class ComposeMessageActivity extends Activity
 
         @Override
         public void onItemCheckedStateChanged(ActionMode mode, int position,
-                                              long id, boolean checked) {
+                long id, boolean checked) {
             logMultiChoice("onItemCheckedStateChanged... position=" + position
                     + ", checked=" + checked);
 
@@ -6150,13 +6134,6 @@ public class ComposeMessageActivity extends Activity
             mode.setTitle(getString(R.string.selected_count, mCheckedCount));
 
             mode.getMenu().findItem(R.id.selection_toggle).setTitle(getString(
-                    allItemsSelected() ? R.string.deselected_all : R.string.selected_all));
-        }
-
-        private void updateCheckedStatus(ActionMode actionMode, int checkedCount) {
-            mCheckedCount = checkedCount;
-            actionMode.setTitle(getString(R.string.selected_count, mCheckedCount));
-            actionMode.getMenu().findItem(R.id.selection_toggle).setTitle(getString(
                     allItemsSelected() ? R.string.deselected_all : R.string.selected_all));
         }
 
@@ -6183,7 +6160,7 @@ public class ComposeMessageActivity extends Activity
                 item.setCountDown(countDown);
                 int count = mMsgListView.getChildCount();
                 for (int i = 0; i < count; i++) {
-                    MessageListItem v = (MessageListItem) mMsgListView.getChildAt(i);
+                    MessageListItem v = (MessageListItem) mMsgListView.getChildAt(i - mMsgListView.getFirstVisiblePosition());
                     MessageItem listItem = v.getMessageItem();
                     if (item.equals(listItem)) {
                         v.updateDelayCountDown();
@@ -6216,5 +6193,18 @@ public class ComposeMessageActivity extends Activity
         };
         Thread t = new Thread(r);
         t.run();
+    }
+
+    public void onPickup() {
+        if (!getRecipients().isEmpty()) {
+            mProximitySensorManager.disable();
+
+            // get number and attach it to an Intent.ACTION_CALL, then start the Intent
+            String number = getRecipients().get(0).getNumber();
+            Intent dialIntent = new Intent(Intent.ACTION_CALL);
+            dialIntent.setData(Uri.fromParts("tel", number, null));
+            dialIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(dialIntent);
+        }
     }
 }

@@ -273,7 +273,7 @@ public class ConversationOptionsActivity extends Activity {
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
             case android.R.id.home:
-                Intent intent = ComposeMessageActivity.createIntent(this, mThreadId);
+                Intent intent = ComposeMessageActivity.createIntent(this, mThreadId,false);
                 startActivity(intent);
                 break;
         }

@@ -215,7 +215,7 @@ public class MailBoxMessageList extends ListActivity implements
             @Override
             public void onClick(View view) {
                 startActivity(ComposeMessageActivity.createIntent(
-                        MailBoxMessageList.this, 0));
+                        MailBoxMessageList.this, 0, false));
             }
         });
     }
@@ -276,7 +276,7 @@ public class MailBoxMessageList extends ListActivity implements
 
             // If it's draft, launch ComposeMessageActivity.
             if (isDraft) {
-                startActivity(ComposeMessageActivity.createIntent(this, threadId));
+                startActivity(ComposeMessageActivity.createIntent(this, threadId, false));
                 return;
             } else if ("sms".equals(type)) {
                 // If the message is a failed one, clicking it should reload it in the compose view,
